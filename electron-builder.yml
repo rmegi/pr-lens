@@ -1,0 +1,19 @@
+appId: dev.prlens.app
+productName: PR Lens
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - resources/**
+mac:
+  category: public.app-category.developer-tools
+  target: [dmg, zip]
+linux:
+  category: Development
+  target: [AppImage, deb]
+  maintainer: PR Lens
+win:
+  target: [nsis]
