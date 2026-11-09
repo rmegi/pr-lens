@@ -10,8 +10,15 @@ fixPath()
 
 let win: BrowserWindow | null = null
 
+// Packaged macOS/Windows builds embed the icon in the app bundle/exe. Dev mode runs the stock
+// Electron binary, and Linux windows need it set explicitly, so point at the PNG ourselves.
+const iconPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'icon.png')
+  : path.join(app.getAppPath(), 'build/icon.png')
+
 function createWindow() {
   win = new BrowserWindow({
+    icon: process.platform === 'linux' ? iconPath : undefined,
     width: 1500,
     height: 950,
     minWidth: 960,
@@ -113,7 +120,10 @@ app.whenReady().then(() => {
       })
     })
   }
-  if (process.platform === 'darwin') app.setName('PR Lens')
+  if (process.platform === 'darwin') {
+    app.setName('PR Lens')
+    if (!app.isPackaged) app.dock?.setIcon(iconPath)
+  }
   applyTheme()
   registerIpc()
   createWindow()

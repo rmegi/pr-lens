@@ -6,6 +6,10 @@ directories:
 files:
   - out/**/*
   - package.json
+icon: build/icon.png
+extraResources:
+  - from: build/icon.png
+    to: icon.png
 asarUnpack:
   - resources/**
 mac:
