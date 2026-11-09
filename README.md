@@ -4,6 +4,16 @@ A desktop app for reviewing pull requests locally. Pick a repository, compare a 
 
 Runs on **macOS and Linux** (Windows works too). Built with Electron, React, TypeScript, Tailwind CSS and Monaco.
 
+## Download
+
+Get the installer for your system from the [latest release](https://github.com/rmegi/pr-lens/releases/latest): `.dmg` for macOS (`arm64` = Apple Silicon, `x64` = Intel), `.exe` for Windows, `.AppImage` or `.deb` for Linux.
+
+The builds are not code-signed yet, so the first launch shows a warning:
+
+- **macOS:** open the app, then go to **System Settings → Privacy & Security** and click **Open Anyway**. Or run `xattr -cr "/Applications/PR Lens.app"` once.
+- **Windows:** on the SmartScreen warning, click **More info → Run anyway**.
+- **Linux:** `chmod +x PR-Lens-*.AppImage` and run it, or `sudo apt install ./PR-Lens-*.deb`.
+
 ## Features
 
 - **PR-accurate diff**: compares the branch against its merge-base with the base branch (`git diff base...branch`), so changes that landed on `develop` afterwards don't show up.
@@ -43,7 +53,20 @@ npm run build:linux   # .AppImage + .deb
 npm run build:win     # .exe (NSIS)
 ```
 
-Output goes to `dist/`. Builds are unsigned. On macOS, right-click → Open the first time, or add signing config to `electron-builder.yml`.
+Output goes to `dist/`. Builds are unsigned.
+
+## Release
+
+`.github/workflows/release.yml` builds macOS (arm64 + x64), Linux and Windows installers on GitHub Actions and publishes them as a GitHub release:
+
+```bash
+npm version 0.2.0 --no-git-tag-version   # bump package.json
+git commit -am "Release 0.2.0"
+git tag v0.2.0
+git push origin main v0.2.0
+```
+
+Use **Actions → Release → Run workflow** to build without publishing. To sign and notarize the macOS build, add the signing secrets described at the top of the workflow.
 
 ## AI setup
 

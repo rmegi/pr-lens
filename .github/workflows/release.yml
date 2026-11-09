@@ -1,0 +1,123 @@
+# Builds PR Lens for macOS, Linux and Windows and publishes a GitHub release.
+#
+# Release a new version:
+#   1. bump "version" in package.json (e.g. 0.2.0) and commit
+#   2. git tag v0.2.0 && git push origin main v0.2.0
+#
+# "Run workflow" on the Actions tab builds everything without publishing
+# (the installers are attached to the run as artifacts).
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            args: --mac --arm64 --x64
+          - name: Linux
+            os: ubuntu-latest
+            args: --linux --x64
+          - name: Windows
+            os: windows-latest
+            args: --win --x64
+    env:
+      # Builds are unsigned for now. Remove this and add CSC_LINK / CSC_KEY_PASSWORD
+      # (and APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID for notarization) to sign.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if [ "v$v" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version $v"
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npx electron-vite build
+
+      - name: Package
+        run: npx electron-builder ${{ matrix.args }} --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-lens-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest*.yml
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## Download
+
+          | System | File |
+          |---|---|
+          | Mac with Apple Silicon (M1–M4) | `PR-Lens-*-mac-arm64.dmg` |
+          | Intel Mac | `PR-Lens-*-mac-x64.dmg` |
+          | Windows | `PR-Lens-*-win-x64.exe` |
+          | Linux | `PR-Lens-*-linux-x86_64.AppImage` or `.deb` |
+
+          ### First launch
+          These builds are not code-signed yet, so your OS will warn you once.
+
+          - **macOS:** drag PR Lens to Applications and open it. When macOS blocks it, go to
+            **System Settings → Privacy & Security** and click **Open Anyway**. Or run once in Terminal:
+            `xattr -cr "/Applications/PR Lens.app"`
+          - **Windows:** on the SmartScreen warning click **More info → Run anyway**.
+          - **Linux:** `chmod +x PR-Lens-*.AppImage` then run it, or `sudo apt install ./PR-Lens-*.deb`.
+
+          ### Requirements
+          `git` must be installed. For AI reviews, log in to the Claude Code CLI (`claude`, then `/login`)
+          or add an Anthropic API key in Settings.
+          EOF
+          ls -la artifacts
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "PR Lens ${GITHUB_REF_NAME}" \
+            --notes-file notes.md

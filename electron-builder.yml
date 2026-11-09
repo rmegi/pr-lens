@@ -12,12 +12,23 @@ extraResources:
     to: icon.png
 asarUnpack:
   - resources/**
+# No spaces in download file names, e.g. PR-Lens-0.1.0-mac-arm64.dmg
+artifactName: PR-Lens-${version}-${os}-${arch}.${ext}
 mac:
   category: public.app-category.developer-tools
   target: [dmg, zip]
 linux:
   category: Development
   target: [AppImage, deb]
-  maintainer: PR Lens
 win:
   target: [nsis]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+# Used by `electron-builder --publish always` in .github/workflows/release.yml:
+# uploads the installers to the GitHub release for the pushed tag.
+publish:
+  provider: github
+  owner: rmegi
+  repo: pr-lens
+  releaseType: release
