@@ -1,7 +1,7 @@
 {
   "name": "pr-lens",
   "productName": "PR Lens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Desktop side-by-side branch diff viewer with an AI PR review assistant",
   "homepage": "https://github.com/rmegi/pr-lens",
   "repository": {
