@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangedFile, Commit } from '@shared/types'
+import type { ChangedFile, Commit, MergedInfo } from '@shared/types'
 
 const STATUS_STYLE: Record<string, string> = {
   A: 'text-emerald-600 dark:text-emerald-400',
@@ -15,9 +15,50 @@ interface Props {
   selected: string | null
   onSelect: (path: string) => void
   loading: boolean
+  base: string
+  head: string
+  merged?: MergedInfo
+  /** Switch the base ref, e.g. to the commit before the branch was merged. */
+  onUseBase: (ref: string) => void
 }
 
-export default function Sidebar({ files, commits, selected, onSelect, loading }: Props) {
+function EmptyState({ base, head, merged, onUseBase }: Pick<Props, 'base' | 'head' | 'merged' | 'onUseBase'>) {
+  const mono = 'font-mono text-zinc-700 dark:text-zinc-300'
+  if (!merged) return <div className="px-3 py-2 text-zinc-400">No changes between these branches.</div>
+  if (merged.sameCommit)
+    return (
+      <div className="px-3 py-2 text-zinc-400">
+        <span className={mono}>{head}</span> and <span className={mono}>{base}</span> point at the same commit.
+      </div>
+    )
+  return (
+    <div className="m-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-[12.5px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+      <div className="font-medium text-zinc-800 dark:text-zinc-200">Already merged</div>
+      <p className="mt-1">
+        <span className={`${mono} break-all`}>{head}</span> is already part of <span className={mono}>{base}</span>, so there is
+        nothing left to review.
+      </p>
+      {merged.mergeCommit && (
+        <p className="mt-1.5 text-[12px]">
+          Merged in <span className="font-mono">{merged.mergeCommit}</span>
+          {merged.mergeSubject && <span className="block truncate text-zinc-500" title={merged.mergeSubject}>{merged.mergeSubject}</span>}
+        </p>
+      )}
+      {merged.beforeMerge ? (
+        <button
+          onClick={() => onUseBase(merged.beforeMerge!)}
+          className="mt-2.5 w-full rounded-md bg-accent px-2 py-1.5 font-medium text-white hover:brightness-110"
+        >
+          Show what it changed
+        </button>
+      ) : (
+        <p className="mt-1.5 text-[12px]">It was fast-forwarded, so there is no merge commit to compare against.</p>
+      )}
+    </div>
+  )
+}
+
+export default function Sidebar({ files, commits, selected, onSelect, loading, base, head, merged, onUseBase }: Props) {
   const [tab, setTab] = useState<'files' | 'commits'>('files')
   const [q, setQ] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -72,7 +113,7 @@ export default function Sidebar({ files, commits, selected, onSelect, loading }:
           <div ref={listRef} className="flex-1 overflow-y-auto pb-2">
             {loading && <div className="px-3 py-2 text-zinc-400">Loading…</div>}
             {!loading && files.length === 0 && (
-              <div className="px-3 py-2 text-zinc-400">No changes between these branches.</div>
+              <EmptyState base={base} head={head} merged={merged} onUseBase={onUseBase} />
             )}
             {shown.map((f) => {
               const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''

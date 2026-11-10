@@ -3,7 +3,7 @@ import { promisify } from 'node:util'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Branch, ChangedFile, Comparison, FilePair, FileStatus, RepoInfo } from '@shared/types'
+import type { Branch, ChangedFile, Comparison, FilePair, FileStatus, RepoInfo, MergedInfo } from '@shared/types'
 
 const exec = promisify(execFile)
 const MAX_BUFFER = 256 * 1024 * 1024
@@ -156,7 +156,44 @@ export async function compare(
     })
 
   files.sort((a, b) => a.path.localeCompare(b.path))
-  return { base, head, mergeBase, files, commits }
+  const merged = files.length === 0 ? await findMerge(repo, base, head, mergeBase) : undefined
+  return { base, head, mergeBase, files, commits, merged }
+}
+
+async function isAncestor(repo: string, a: string, b: string): Promise<boolean> {
+  try {
+    await git(repo, ['merge-base', '--is-ancestor', a, b]) // exit 1 = not an ancestor
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The diff is empty. If that is because `head` is already part of `base`, find the merge commit
+ * that brought it in, so the UI can offer to compare against `base` as it was before that merge.
+ */
+async function findMerge(repo: string, base: string, head: string, mergeBase: string): Promise<MergedInfo | undefined> {
+  const [headSha, baseSha] = (await git(repo, ['rev-parse', `${head}^{commit}`, `${base}^{commit}`]))
+    .trim()
+    .split('\n')
+  if (headSha === baseSha) return { sameCommit: true }
+  if (mergeBase !== headSha) return undefined // diverged but identical content: nothing to explain
+
+  // Merge commits that descend from head and lead to base, oldest first. The first one whose
+  // first parent does not already contain head is the merge that brought the branch in.
+  const merges = (await git(repo, ['rev-list', '--ancestry-path', '--merges', '--reverse', `${headSha}..${baseSha}`]))
+    .split('\n')
+    .filter(Boolean)
+    .slice(0, 200)
+  for (const m of merges) {
+    const firstParent = (await git(repo, ['rev-parse', `${m}^1`])).trim()
+    if (await isAncestor(repo, headSha, firstParent)) continue
+    const [short, subject] = (await git(repo, ['log', '-1', '--format=%h%x09%s', m])).trim().split('\t')
+    const beforeMerge = (await git(repo, ['rev-parse', '--short=12', firstParent])).trim()
+    return { mergeCommit: short, mergeSubject: subject, beforeMerge }
+  }
+  return {} // fast-forwarded into base: there is no "before" commit to compare against
 }
 
 async function showBlob(repo: string, rev: string, file: string): Promise<{ text: string; binary: boolean; tooLarge: boolean }> {

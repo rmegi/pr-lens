@@ -295,6 +295,10 @@ export default function App() {
               selected={selected}
               onSelect={setSelected}
               loading={loading}
+              base={base}
+              head={head}
+              merged={cmp?.merged}
+              onUseBase={setBase}
             />
           </div>
           <Splitter onDrag={(dx) => setLayout((l) => ({ ...l, sidebar: Math.max(200, Math.min(520, l.sidebar + dx)) }))} />

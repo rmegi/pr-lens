@@ -30,12 +30,24 @@ export interface Commit {
   subject: string
 }
 
+/** Set when the compare branch has no changes because it is already in the base branch. */
+export interface MergedInfo {
+  /** Both refs point at the same commit. */
+  sameCommit?: boolean
+  /** The merge commit on the base branch that brought the compare branch in (short hash). */
+  mergeCommit?: string
+  mergeSubject?: string
+  /** The base branch just before that merge; comparing against it shows what the branch changed. */
+  beforeMerge?: string
+}
+
 export interface Comparison {
   base: string
   head: string
   mergeBase: string
   files: ChangedFile[]
   commits: Commit[]
+  merged?: MergedInfo
 }
 
 export interface FilePair {
