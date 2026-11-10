@@ -73,12 +73,15 @@ export interface ReviewRequest {
   force?: boolean
 }
 
+/** What the user can do about a review error; the panel shows matching steps. */
+export type ErrorFix = 'cli-login' | 'cli-missing' | 'api-key'
+
 export type ReviewEvent =
   | { id: string; type: 'status'; text: string }
   | { id: string; type: 'delta'; text: string }
   | { id: string; type: 'replace'; text: string }
   | { id: string; type: 'done'; note?: string }
-  | { id: string; type: 'error'; message: string }
+  | { id: string; type: 'error'; message: string; fix?: ErrorFix }
   | { id: string; type: 'confirm-large'; bytes: number }
 
 export interface PrLensApi {

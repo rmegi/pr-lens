@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import type { ErrorFix } from '@shared/types'
 import { findExecutable } from '../env'
 import { SYSTEM_PROMPT } from './prompt'
 
@@ -6,7 +7,15 @@ export interface Sink {
   status(text: string): void
   replace(text: string): void
   done(note?: string): void
-  error(message: string): void
+  error(message: string, fix?: ErrorFix): void
+}
+
+// Messages the CLI prints when its login is missing, expired or revoked,
+// e.g. "Failed to authenticate: OAuth session expired and could not be refreshed".
+const LOGIN_ERROR = /authenticat|oauth|log ?in|not logged|unauthori[sz]ed|\b401\b|invalid (api key|x-api-key)|credential/i
+
+function cliError(sink: Sink, message: string) {
+  sink.error(message, LOGIN_ERROR.test(message) ? 'cli-login' : undefined)
 }
 
 function describeTool(name: string, input: Record<string, unknown>): string {
@@ -22,9 +31,7 @@ function describeTool(name: string, input: Record<string, unknown>): string {
 export function runClaudeCli(opts: { repo: string; prompt: string; model: string; sink: Sink }): () => void {
   const bin = findExecutable('claude')
   if (!bin) {
-    opts.sink.error(
-      'The Claude Code CLI (`claude`) was not found. Install it from https://claude.com/claude-code, or switch to the Anthropic API provider in Settings.'
-    )
+    opts.sink.error('The Claude Code CLI (`claude`) was not found on this computer.', 'cli-missing')
     return () => {}
   }
 
@@ -78,7 +85,7 @@ export function runClaudeCli(opts: { repo: string; prompt: string; model: string
     } else if (msg.type === 'result') {
       finished = true
       if (msg.is_error || msg.subtype !== 'success') {
-        opts.sink.error(String(msg.result || msg.subtype || 'Claude Code reported an error'))
+        cliError(opts.sink, String(msg.result || msg.subtype || 'Claude Code reported an error'))
       } else {
         opts.sink.replace(String(msg.result ?? lastFull))
         const cost = typeof msg.total_cost_usd === 'number' ? ` · $${msg.total_cost_usd.toFixed(3)}` : ''
@@ -113,7 +120,7 @@ export function runClaudeCli(opts: { repo: string; prompt: string; model: string
     if (finished) return
     finished = true
     if (cancelled) opts.sink.done('Stopped')
-    else opts.sink.error(stderr.trim() || `Claude Code exited with code ${code}`)
+    else cliError(opts.sink, stderr.trim() || `Claude Code exited with code ${code}`)
   })
 
   child.stdin.on('error', () => {})

@@ -17,6 +17,13 @@ function friendlyError(err: unknown): string {
   return msg
 }
 
+/** Missing or rejected key: the panel offers to open Settings. */
+function isKeyProblem(err: unknown): boolean {
+  if (err instanceof Anthropic.AuthenticationError) return true
+  if (err instanceof Anthropic.APIError) return false
+  return /api.?key|credentials|auth/i.test(err instanceof Error ? err.message : String(err))
+}
+
 export function runAnthropicApi(opts: { apiKey?: string; prompt: string; model: string; sink: Sink }): () => void {
   const controller = new AbortController()
   let cancelled = false
@@ -64,7 +71,7 @@ export function runAnthropicApi(opts: { apiKey?: string; prompt: string; model: 
       else opts.sink.done(note)
     } catch (err) {
       if (cancelled) opts.sink.done('Stopped')
-      else opts.sink.error(friendlyError(err))
+      else opts.sink.error(friendlyError(err), isKeyProblem(err) ? 'api-key' : undefined)
     }
   })()
 

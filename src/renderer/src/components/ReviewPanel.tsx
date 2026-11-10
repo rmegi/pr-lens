@@ -1,8 +1,96 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { ChangedFile, ReviewEvent, Settings } from '@shared/types'
+import type { ChangedFile, ErrorFix, ReviewEvent, Settings } from '@shared/types'
 import { IconCopy, IconSparkle, IconX } from '../lib/icons'
+
+function CopyCommand({ cmd }: { cmd: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-black/10 px-1.5 py-0.5 font-mono text-[12px] dark:bg-white/10">
+      <span className="select-text">{cmd}</span>
+      <button
+        title="Copy"
+        onClick={() => {
+          navigator.clipboard.writeText(cmd)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1200)
+        }}
+        className="opacity-60 hover:opacity-100"
+      >
+        {copied ? '✓' : <IconCopy width={12} height={12} />}
+      </button>
+    </span>
+  )
+}
+
+/** Error box with concrete steps when we know how to fix the problem. */
+function ReviewError({ message, fix, onOpenSettings }: { message: string; fix?: ErrorFix; onOpenSettings: () => void }) {
+  const box =
+    'rounded-md border border-rose-300 bg-rose-50 p-3 text-rose-900 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-100'
+  const settingsLink = (label: string) => (
+    <button onClick={onOpenSettings} className="font-medium underline underline-offset-2">
+      {label}
+    </button>
+  )
+
+  if (fix === 'cli-login') {
+    return (
+      <div className={box}>
+        <div className="font-semibold">Claude Code CLI login expired</div>
+        <p className="mt-1 text-[12.5px] opacity-90">
+          PR Lens runs the <code>claude</code> command on this computer, and its login has expired or is missing. This login is
+          separate from the Claude desktop app.
+        </p>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[12.5px]">
+          <li>
+            Open a terminal and run <CopyCommand cmd="claude" />
+          </li>
+          <li>
+            Type <CopyCommand cmd="/login" /> and finish signing in in the browser.
+          </li>
+          <li>Come back and click Run again. No restart needed.</li>
+        </ol>
+        <p className="mt-2 text-[12px] opacity-80">Or {settingsLink('use an Anthropic API key instead')}.</p>
+        <details className="mt-2 text-[11px] opacity-70">
+          <summary className="cursor-pointer">Error details</summary>
+          <div className="mt-1 font-mono select-text">{message}</div>
+        </details>
+      </div>
+    )
+  }
+
+  if (fix === 'cli-missing') {
+    return (
+      <div className={box}>
+        <div className="font-semibold">Claude Code CLI not found</div>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[12.5px]">
+          <li>
+            Install Claude Code from{' '}
+            <a href="https://claude.com/claude-code" target="_blank" rel="noreferrer" className="underline">
+              claude.com/claude-code
+            </a>
+            .
+          </li>
+          <li>
+            Run <CopyCommand cmd="claude" /> once in a terminal and type <CopyCommand cmd="/login" />.
+          </li>
+          <li>Click Run again.</li>
+        </ol>
+        <p className="mt-2 text-[12px] opacity-80">Or {settingsLink('use an Anthropic API key instead')}.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${box} select-text`}>
+      {message}
+      {(fix === 'api-key' || /key|credential|not found|provider/i.test(message)) && (
+        <div className="mt-2">{settingsLink('Open Settings')}</div>
+      )}
+    </div>
+  )
+}
 
 interface ReviewState {
   id: string
@@ -10,6 +98,7 @@ interface ReviewState {
   status: string
   note?: string
   error?: string
+  fix?: ErrorFix
   running: boolean
   confirmBytes?: number
   at: number
@@ -70,7 +159,7 @@ export default function ReviewPanel({ repo, base, head, files, settings, onJump,
           else if (e.type === 'replace') next.text = e.text
           else if (e.type === 'delta') next.text += e.text
           else if (e.type === 'done') Object.assign(next, { running: false, note: e.note, status: '' })
-          else if (e.type === 'error') Object.assign(next, { running: false, error: e.message, status: '' })
+          else if (e.type === 'error') Object.assign(next, { running: false, error: e.message, fix: e.fix, status: '' })
           else if (e.type === 'confirm-large') Object.assign(next, { running: false, confirmBytes: e.bytes, status: '' })
           store.current.set(k, next)
           rerender()
@@ -189,16 +278,7 @@ export default function ReviewPanel({ repo, base, head, files, settings, onJump,
             </div>
           </div>
         )}
-        {review?.error && (
-          <div className="rounded-md border border-rose-300 bg-rose-50 p-3 text-rose-800 select-text dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-200">
-            {review.error}
-            {/key|credential|not found|provider/i.test(review.error) && (
-              <button onClick={onOpenSettings} className="mt-2 block font-medium underline">
-                Open Settings
-              </button>
-            )}
-          </div>
-        )}
+        {review?.error && <ReviewError message={review.error} fix={review.fix} onOpenSettings={onOpenSettings} />}
         {!review && (
           <div className="mt-6 space-y-2 text-zinc-500">
             <p>

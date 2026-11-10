@@ -20,9 +20,9 @@ export async function startReview(req: ReviewRequest, emit: (e: ReviewEvent) => 
       running.delete(id)
       emit({ id, type: 'done', note })
     },
-    error: (message) => {
+    error: (message, fix) => {
       running.delete(id)
-      emit({ id, type: 'error', message })
+      emit({ id, type: 'error', message, fix })
     }
   }
 
