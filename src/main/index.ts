@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, session, shell } from
 import path from 'node:path'
 import type { ChangedFile, ReviewRequest, SettingsUpdate } from '@shared/types'
 import { fixPath, findExecutable } from './env'
-import { compare, fetchAll, filePair, listBranches, resolveRepo } from './git'
+import { compare, compareCommit, fetchAll, filePair, listBranches, listCommits, resolveRepo } from './git'
 import { addRecentRepo, getSettings, saveSettings } from './settings'
 import { cancelReview, startReview } from './ai/review'
 
@@ -87,6 +87,11 @@ function registerIpc() {
 
   ipcMain.handle('repo:filePair', (_e, repo: string, mergeBase: string, head: string, file: ChangedFile) =>
     filePair(repo, mergeBase, head, file)
+  )
+
+  ipcMain.handle('repo:commits', (_e, repo: string, head: string, skip: number, base?: string) => listCommits(repo, head, skip, base))
+  ipcMain.handle('repo:commit', (_e, repo: string, commit: string, ignoreWs: boolean) =>
+    compareCommit(repo, commit, ignoreWs)
   )
 
   ipcMain.handle('settings:get', () => getSettings())

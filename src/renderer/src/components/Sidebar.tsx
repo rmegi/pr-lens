@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangedFile, Commit, MergedInfo } from '@shared/types'
+import type { Branch, ChangedFile, Commit, MergedInfo } from '@shared/types'
+import BranchPicker from './BranchPicker'
 
 const STATUS_STYLE: Record<string, string> = {
   A: 'text-emerald-600 dark:text-emerald-400',
@@ -10,11 +11,15 @@ const STATUS_STYLE: Record<string, string> = {
 }
 
 interface Props {
+  repo: string
+  branches: Branch[]
   files: ChangedFile[]
-  commits: Commit[]
+  commit: Commit | null
+  onSelectCommit: (commit: Commit | null) => void
   selected: string | null
   onSelect: (path: string) => void
   loading: boolean
+  error: string | null
   base: string
   head: string
   merged?: MergedInfo
@@ -58,10 +63,40 @@ function EmptyState({ base, head, merged, onUseBase }: Pick<Props, 'base' | 'hea
   )
 }
 
-export default function Sidebar({ files, commits, selected, onSelect, loading, base, head, merged, onUseBase }: Props) {
+export default function Sidebar({ repo, branches, files, commit, onSelectCommit, selected, onSelect, loading, error, base, head, merged, onUseBase }: Props) {
   const [tab, setTab] = useState<'files' | 'commits'>('files')
+  const [historyBranch, setHistoryBranch] = useState(head)
+  const [commits, setCommits] = useState<Commit[]>([])
+  const [skip, setSkip] = useState(0)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const [hasMore, setHasMore] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const historyHead = useRef(head)
   const [q, setQ] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
+  const branchName = branches.find((b) => b.name === historyBranch)?.remote
+    ? historyBranch.slice(historyBranch.indexOf('/') + 1)
+    : historyBranch
+  const isMainBranch = historyBranch === base || ['main', 'master', 'develop', 'dev'].includes(branchName)
+  const historyBase = isMainBranch || !base ? undefined : base
+
+  useEffect(() => {
+    if (!historyBranch) return
+    let stale = false
+    setHistoryLoading(true)
+    setHistoryError('')
+    window.api.listCommits(repo, historyHead.current, skip, historyBase)
+      .then((page) => {
+        if (stale) return
+        if (skip === 0 && page[0]) historyHead.current = page[0].hash
+        setCommits((previous) => skip === 0 ? page : [...previous, ...page])
+        setHasMore(page.length === 100)
+      })
+      .catch((e) => !stale && setHistoryError(String(e.message ?? e)))
+      .finally(() => !stale && setHistoryLoading(false))
+    return () => { stale = true }
+  }, [repo, historyBranch, historyBase, skip, retry])
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -89,7 +124,7 @@ export default function Sidebar({ files, commits, selected, onSelect, loading, b
               tab === t ? 'border-accent font-medium text-zinc-900 dark:text-zinc-50' : 'border-transparent text-zinc-500'
             }`}
           >
-            {t} <span className="text-zinc-400">{t === 'files' ? files.length : commits.length}</span>
+            {t} <span className="text-zinc-400">{t === 'files' ? files.length : `${commits.length}${hasMore ? '+' : ''}`}</span>
           </button>
         ))}
         {tab === 'files' && files.length > 0 && (
@@ -99,6 +134,27 @@ export default function Sidebar({ files, commits, selected, onSelect, loading, b
           </span>
         )}
       </div>
+
+      {(tab === 'commits' || commit) && (
+        <div className="shrink-0 border-b border-zinc-200 p-2 dark:border-zinc-800/80">
+          <BranchPicker
+            label="history"
+            value={historyBranch}
+            branches={branches}
+            onChange={(branch) => {
+              if (branch === historyBranch) return
+              historyHead.current = branch
+              setSkip(0)
+              setCommits([])
+              setHasMore(false)
+              onSelectCommit(null)
+              setTab('commits')
+              setHistoryBranch(branch)
+            }}
+          />
+          {historyBase && <div className="mt-1 text-[11px] text-zinc-500">Commits ahead of {historyBase}</div>}
+        </div>
+      )}
 
       {tab === 'files' ? (
         <>
@@ -112,8 +168,10 @@ export default function Sidebar({ files, commits, selected, onSelect, loading, b
           </div>
           <div ref={listRef} className="flex-1 overflow-y-auto pb-2">
             {loading && <div className="px-3 py-2 text-zinc-400">Loading…</div>}
-            {!loading && files.length === 0 && (
-              <EmptyState base={base} head={head} merged={merged} onUseBase={onUseBase} />
+            {!loading && !error && files.length === 0 && (
+              commit
+                ? <div className="px-3 py-2 text-zinc-400">This commit has no file changes against its first parent.</div>
+                : <EmptyState base={base} head={head} merged={merged} onUseBase={onUseBase} />
             )}
             {shown.map((f) => {
               const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
@@ -153,17 +211,44 @@ export default function Sidebar({ files, commits, selected, onSelect, loading, b
         </>
       ) : (
         <div className="flex-1 overflow-y-auto py-1">
-          {commits.length === 0 && <div className="px-3 py-2 text-zinc-400">No commits.</div>}
+          <div className="px-3 py-2 text-[11px] text-zinc-500">Select a commit to view its changes.</div>
+          {!historyLoading && !historyError && commits.length === 0 && (
+            <div className="px-3 py-2 text-zinc-400">
+              {historyBase ? `No commits ahead of ${historyBase}.` : 'No commits.'}
+            </div>
+          )}
           {commits.map((c) => (
-            <div key={c.hash} className="border-b border-zinc-100 px-3 py-2 dark:border-zinc-800/60">
+            <button
+              key={c.hash}
+              aria-pressed={commit?.hash === c.hash}
+              onClick={() => {
+                onSelectCommit(c)
+                setQ('')
+              }}
+              className={`block w-full border-b border-zinc-100 px-3 py-2 text-left dark:border-zinc-800/60 ${
+                commit?.hash === c.hash ? 'bg-accent-soft' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
+              }`}
+            >
               <div className="select-text leading-snug">{c.subject}</div>
               <div className="mt-0.5 flex gap-2 text-[11px] text-zinc-400">
-                <span className="font-mono">{c.hash}</span>
+                <span className="font-mono" title={c.hash}>{c.hash.slice(0, 7)}</span>
                 <span className="truncate">{c.author}</span>
                 <span className="ml-auto shrink-0">{c.date}</span>
               </div>
-            </div>
+            </button>
           ))}
+          {historyError && (
+            <div className="px-3 py-2 text-rose-500">
+              {historyError}
+              <button onClick={() => setRetry((n) => n + 1)} className="ml-2 underline">Retry</button>
+            </div>
+          )}
+          {historyLoading && <div className="px-3 py-2 text-zinc-400">Loading history…</div>}
+          {hasMore && !historyLoading && !historyError && (
+            <button onClick={() => setSkip(commits.length)} className="w-full px-3 py-2 text-accent hover:underline">
+              Load older commits
+            </button>
+          )}
         </div>
       )}
     </aside>

@@ -19,6 +19,7 @@ The builds are not code-signed yet, so the first launch shows a warning:
 - **PR-accurate diff**: compares the branch against its merge-base with the base branch (`git diff base...branch`), so changes that landed on `develop` afterwards don't show up.
 - **Side-by-side or inline** Monaco diff with syntax highlighting, collapsed unchanged regions, ignore-whitespace and word wrap.
 - File list with added/modified/deleted/renamed badges and line counts, a file filter, and the commit list.
+- **Commit history:** the Commits tab shows feature-branch commits ahead of the selected base, 100 at a time. Main/develop branches show their full history. Use its **history** branch picker to switch between your feature branch, main, or any local/remote branch independently of the branch comparison. The picker stays available while viewing a commit's files. Select a commit to see its changes against its first parent (including merge commits), then use **Back to branch comparison** to return. The first commit shows all its files as additions. Browsing never checks out a commit or modifies your working files; AI review follows the selected commit.
 - Searchable branch pickers (local and remote), a swap button, and `git fetch --all --prune`.
 - **AI review panel** that streams Markdown. `path:line` references are clickable and open the diff at that line.
   - **Claude Code CLI** provider: uses your existing `claude` login, and can read surrounding code with read-only tools (Read/Grep/Glob).
@@ -44,6 +45,8 @@ npm run dev
 ```
 
 If npm skipped Electron's download (npm 11 can block install scripts), run `node node_modules/electron/install.js` once.
+
+Run `npm test` for Git history/diff regression tests (Node 22.6+), and `npm run typecheck` for TypeScript checks.
 
 ## Build installers
 
