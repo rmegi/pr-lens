@@ -81,6 +81,7 @@ export interface ReviewRequest {
   repo: string
   base: string
   head: string
+  commit?: string
   /** set after the user confirmed sending a large diff */
   force?: boolean
 }
@@ -101,6 +102,8 @@ export interface PrLensApi {
   openRepo(path: string): Promise<RepoInfo>
   fetch(repo: string): Promise<RepoInfo>
   compare(repo: string, base: string, head: string, ignoreWhitespace: boolean): Promise<Comparison>
+  listCommits(repo: string, head: string, skip: number, base?: string): Promise<Commit[]>
+  compareCommit(repo: string, commit: string, ignoreWhitespace: boolean): Promise<Comparison>
   filePair(repo: string, mergeBase: string, head: string, file: ChangedFile): Promise<FilePair>
   getSettings(): Promise<Settings>
   saveSettings(update: SettingsUpdate): Promise<Settings>

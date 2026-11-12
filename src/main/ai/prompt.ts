@@ -8,6 +8,7 @@ export interface PromptInput {
   repoName: string
   base: string
   head: string
+  commit?: string
   currentBranch: string
   commits: Commit[]
   files: ChangedFile[]
@@ -34,7 +35,11 @@ export function buildPrompt(p: PromptInput): string {
     ? `\n<team_review_guidelines>\n${p.reviewInstructions.trim()}\n</team_review_guidelines>\n`
     : ''
 
-  return `Review the changes that branch \`${p.head}\` would merge into \`${p.base}\` in the repository "${p.repoName}".
+  const target = p.commit
+    ? `Review commit \`${p.head}\` compared with its first parent (or the empty tree for the first commit)`
+    : `Review the changes that branch \`${p.head}\` would merge into \`${p.base}\``
+
+  return `${target} in the repository "${p.repoName}".
 ${repoNote}${extra}
 <commits>
 ${commits}

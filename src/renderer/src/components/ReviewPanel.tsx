@@ -108,6 +108,7 @@ interface Props {
   repo: string
   base: string
   head: string
+  commit?: string
   files: ChangedFile[]
   settings: Settings | null
   onJump: (path: string, line: number) => void
@@ -140,8 +141,8 @@ function fmtBytes(n: number) {
   return n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1e3)} KB`
 }
 
-export default function ReviewPanel({ repo, base, head, files, settings, onJump, onOpenSettings, onClose, runSignal }: Props) {
-  const key = `${repo}|${base}|${head}`
+export default function ReviewPanel({ repo, base, head, commit, files, settings, onJump, onOpenSettings, onClose, runSignal }: Props) {
+  const key = commit ? `${repo}|commit|${commit}` : `${repo}|${base}|${head}`
   const store = useRef(new Map<string, ReviewState>())
   const [, force] = useState(0)
   const rerender = () => force((n) => n + 1)
@@ -177,9 +178,9 @@ export default function ReviewPanel({ repo, base, head, files, settings, onJump,
       store.current.set(key, { id, text: '', status: 'Starting…', running: true, at: Date.now() })
       stick.current = true
       rerender()
-      window.api.startReview({ id, repo, base, head, force: forceLarge })
+      window.api.startReview({ id, repo, base, head, commit, force: forceLarge })
     },
-    [key, repo, base, head]
+    [key, repo, base, head, commit]
   )
 
   const stop = () => {
@@ -247,7 +248,7 @@ export default function ReviewPanel({ repo, base, head, files, settings, onJump,
             className="flex h-7 items-center gap-1.5 rounded-md bg-accent px-3 font-medium text-white shadow-sm hover:brightness-110 disabled:opacity-40"
           >
             <IconSparkle width={14} height={14} />
-            {review ? 'Run again' : 'Review this PR'}
+            {review ? 'Run again' : commit ? 'Review this commit' : 'Review this PR'}
           </button>
         )}
         <span className="truncate text-[11px] text-zinc-400">
@@ -282,8 +283,8 @@ export default function ReviewPanel({ repo, base, head, files, settings, onJump,
         {!review && (
           <div className="mt-6 space-y-2 text-zinc-500">
             <p>
-              Get a summary of <span className="font-mono text-zinc-700 dark:text-zinc-300">{head || '…'}</span> →{' '}
-              <span className="font-mono text-zinc-700 dark:text-zinc-300">{base || '…'}</span>: what it does, whether
+              Get a summary of <span className="font-mono text-zinc-700 dark:text-zinc-300">{commit ? head.slice(0, 7) : head || '…'}</span> →{' '}
+              <span className="font-mono text-zinc-700 dark:text-zinc-300">{commit ? (base === 'Empty tree' ? base : 'first parent') : base || '…'}</span>: what it does, whether
               it is a feature or a fix, risks, and concrete recommendations.
             </p>
             <p className="text-[12px]">File references in the review are clickable and open the diff at that line.</p>

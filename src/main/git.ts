@@ -3,7 +3,7 @@ import { promisify } from 'node:util'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Branch, ChangedFile, Comparison, FilePair, FileStatus, RepoInfo, MergedInfo } from '@shared/types'
+import type { Branch, ChangedFile, Commit, Comparison, FilePair, FileStatus, RepoInfo, MergedInfo } from '@shared/types'
 
 const exec = promisify(execFile)
 const MAX_BUFFER = 256 * 1024 * 1024
@@ -88,6 +88,44 @@ export async function fetchAll(repo: string): Promise<void> {
   await git(repo, ['fetch', '--all', '--prune'])
 }
 
+function parseCommits(log: string): Commit[] {
+  return log.split('\n').filter(Boolean).map((line) => {
+    const [hash, author, date, ...subject] = line.split('\t')
+    return { hash, author, date, subject: subject.join('\t') }
+  })
+}
+
+export async function listCommits(repo: string, head: string, skip: number, base?: string): Promise<Commit[]> {
+  checkRef(head, 'history')
+  if (base !== undefined) checkRef(base, 'base')
+  if (!Number.isSafeInteger(skip) || skip < 0) throw new GitError('Invalid history offset')
+  return parseCommits(await git(repo, [
+    'log', '--date-order', '--format=%H%x09%an%x09%ar%x09%s', '--max-count=100', `--skip=${skip}`,
+    base === undefined ? head : `${base}..${head}`, '--'
+  ]))
+}
+
+/** A commit's changes relative to its first parent, or the empty tree for a root commit. */
+export async function compareCommit(repo: string, commit: string, ignoreWhitespace: boolean): Promise<Comparison> {
+  checkHash(commit)
+  const commits = parseCommits(await git(repo, ['log', '-1', '--format=%H%x09%an%x09%ar%x09%s', commit, '--']))
+  const head = commits[0]?.hash
+  if (!head) throw new GitError(`Commit not found: ${commit}`)
+  // Read actual parents: traversal commands hide parents at shallow-clone boundaries.
+  const headers = (await git(repo, ['cat-file', 'commit', head])).split('\n\n')[0]
+  const parent = /^parent ([0-9a-f]+)$/m.exec(headers)?.[1]
+  const base = parent ?? await new Promise<string>((resolve, reject) => {
+    // Ask Git for the empty tree hash so SHA-1 and SHA-256 repositories both work, without writing objects.
+    const child = execFile('git', ['hash-object', '-t', 'tree', '--stdin'], { cwd: repo }, (err, stdout) => {
+      if (err) reject(new GitError(err.message))
+      else resolve(stdout.trim())
+    })
+    child.stdin!.end()
+  })
+  const files = await changedFiles(repo, base, head, ignoreWhitespace)
+  return { base: parent ?? 'Empty tree', head, mergeBase: base, files, commits }
+}
+
 /**
  * Files changed on `head` since its merge-base with `base` (three-dot),
  * i.e. exactly what a PR from head into base shows.
@@ -102,13 +140,21 @@ export async function compare(
   checkRef(head, 'compare')
   const mergeBase = (await git(repo, ['merge-base', base, head])).trim().split('\n')[0]
   if (!mergeBase) throw new GitError(`${base} and ${head} have no common history`)
+  const [files, log] = await Promise.all([
+    changedFiles(repo, mergeBase, head, ignoreWhitespace),
+    git(repo, ['log', '--no-merges', '--format=%h%x09%an%x09%ar%x09%s', `${base}..${head}`])
+  ])
+  const merged = files.length === 0 ? await findMerge(repo, base, head, mergeBase) : undefined
+  return { base, head, mergeBase, files, commits: parseCommits(log), merged }
+}
+
+async function changedFiles(repo: string, base: string, head: string, ignoreWhitespace: boolean): Promise<ChangedFile[]> {
   const ws = ignoreWhitespace ? ['-w'] : []
 
   // -z gives NUL-separated, unquoted output: robust for any file name.
-  const [rawStatus, rawNum, log] = await Promise.all([
-    git(repo, ['diff', '-z', '--name-status', '--find-renames', mergeBase, head]),
-    git(repo, ['diff', '-z', '--numstat', '--find-renames', ...ws, mergeBase, head]),
-    git(repo, ['log', '--no-merges', '--format=%h%x09%an%x09%ar%x09%s', `${base}..${head}`])
+  const [rawStatus, rawNum] = await Promise.all([
+    git(repo, ['diff', '-z', '--name-status', '--find-renames', base, head, '--']),
+    git(repo, ['diff', '-z', '--numstat', '--find-renames', ...ws, base, head, '--'])
   ])
 
   // name-status -z: STATUS\0path\0  or  RXXX\0old\0new\0
@@ -147,17 +193,8 @@ export async function compare(
   }
   // With -w, files whose only changes were whitespace have no numstat → zero counts; keep them listed.
 
-  const commits = log
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const [hash, author, date, ...subject] = line.split('\t')
-      return { hash, author, date, subject: subject.join('\t') }
-    })
-
   files.sort((a, b) => a.path.localeCompare(b.path))
-  const merged = files.length === 0 ? await findMerge(repo, base, head, mergeBase) : undefined
-  return { base, head, mergeBase, files, commits, merged }
+  return files
 }
 
 async function isAncestor(repo: string, a: string, b: string): Promise<boolean> {
@@ -210,7 +247,7 @@ async function showBlob(repo: string, rev: string, file: string): Promise<{ text
   return { text: binary ? '' : buf.toString('utf8'), binary, tooLarge: false }
 }
 
-/** Left = file at merge-base, right = file at head. */
+/** Left = file at the comparison base (merge-base or commit parent), right = file at head. */
 export async function filePair(repo: string, mergeBase: string, head: string, file: ChangedFile): Promise<FilePair> {
   checkHash(mergeBase)
   checkRef(head, 'compare')
@@ -226,9 +263,9 @@ export async function filePair(repo: string, mergeBase: string, head: string, fi
 }
 
 /** Unified diff + commit log, used as the AI review input. */
-export async function reviewMaterial(repo: string, base: string, head: string) {
-  const cmp = await compare(repo, base, head, false)
-  const diff = await git(repo, ['diff', '--no-color', '--find-renames', '-U5', cmp.mergeBase, head])
+export async function reviewMaterial(repo: string, base: string, head: string, commit?: string) {
+  const cmp = commit === undefined ? await compare(repo, base, head, false) : await compareCommit(repo, commit, false)
+  const diff = await git(repo, ['diff', '--no-color', '--find-renames', '-U5', cmp.mergeBase, cmp.head, '--'])
   return { ...cmp, diff }
 }
 

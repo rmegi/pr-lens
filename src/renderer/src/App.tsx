@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Comparison, RepoInfo, Settings, SettingsUpdate } from '@shared/types'
+import type { Commit, Comparison, RepoInfo, Settings, SettingsUpdate } from '@shared/types'
 import BranchPicker from './components/BranchPicker'
 import Sidebar from './components/Sidebar'
 import DiffView, { type ViewOptions } from './components/DiffView'
@@ -75,6 +75,8 @@ export default function App() {
   const [base, setBase] = useState('')
   const [head, setHead] = useState('')
   const [cmp, setCmp] = useState<Comparison | null>(null)
+  const [commit, setCommit] = useState<Commit | null>(null)
+  const [historyVersion, setHistoryVersion] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(false)
@@ -96,8 +98,11 @@ export default function App() {
     try {
       const ri = await window.api.openRepo(p)
       setInfo(ri)
+      setCommit(null)
+      setCmp(null)
+      setHistoryVersion((n) => n + 1)
       const b = ri.defaultBase
-      const other = ri.branches.find((x) => x.name !== b && !x.remote)?.name ?? ri.branches.find((x) => x.name !== b)?.name ?? ''
+      const other = ri.branches.find((x) => x.name !== b && !x.remote)?.name ?? ri.branches.find((x) => x.name !== b)?.name ?? b
       setBase(b)
       setHead(ri.current && ri.current !== b && ri.current !== 'HEAD' ? ri.current : other)
       setSelected(null)
@@ -114,17 +119,21 @@ export default function App() {
     })
   }, [openRepo])
 
-  // Recompute the comparison when branches or whitespace mode change.
+  // Recompute the comparison when branches, selected commit, or whitespace mode change.
   useEffect(() => {
-    if (!info || !base || !head) {
+    if (!info || (!commit && (!base || !head))) {
       setCmp(null)
       return
     }
     let stale = false
     setLoading(true)
     setError(null)
-    window.api
-      .compare(info.repo, base, head, view.ignoreWhitespace)
+    setCmp(null)
+    setJump(null)
+    const comparison = commit
+      ? window.api.compareCommit(info.repo, commit.hash, view.ignoreWhitespace)
+      : window.api.compare(info.repo, base, head, view.ignoreWhitespace)
+    comparison
       .then((c) => {
         if (stale) return
         setCmp(c)
@@ -139,7 +148,7 @@ export default function App() {
     return () => {
       stale = true
     }
-  }, [info, base, head, view.ignoreWhitespace])
+  }, [info, base, head, commit, view.ignoreWhitespace])
 
   const files = cmp?.files ?? []
   const file = files.find((f) => f.path === selected) ?? null
@@ -182,6 +191,7 @@ export default function App() {
     setFetching(true)
     try {
       setInfo(await window.api.fetch(info.repo))
+      setHistoryVersion((n) => n + 1)
     } catch (e) {
       setError(cleanError(e))
     } finally {
@@ -190,6 +200,15 @@ export default function App() {
   }
 
   const saveSettings = async (u: SettingsUpdate) => setSettings(await window.api.saveSettings(u))
+
+  const changeBase = (value: string) => {
+    setCommit(null)
+    setBase(value)
+  }
+  const changeHead = (value: string) => {
+    setCommit(null)
+    setHead(value)
+  }
 
   const onJump = (path: string, line: number) => {
     setSelected(path)
@@ -217,18 +236,19 @@ export default function App() {
         {info && (
           <>
             <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
-            <BranchPicker label="base" value={base} branches={info.branches} onChange={setBase} />
+            <BranchPicker label="base" value={base} branches={info.branches} onChange={changeBase} />
             <button
               className={btn}
               title="Swap base and compare"
               onClick={() => {
+                setCommit(null)
                 setBase(head)
                 setHead(base)
               }}
             >
               <IconSwap width={14} height={14} />
             </button>
-            <BranchPicker label="compare" value={head} branches={info.branches} onChange={setHead} />
+            <BranchPicker label="compare" value={head} branches={info.branches} onChange={changeHead} />
             <button className={btn} onClick={doFetch} disabled={fetching} title="git fetch --all --prune">
               <IconRefresh width={14} height={14} className={fetching ? 'animate-spin' : ''} />
               Fetch
@@ -248,6 +268,17 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {commit && (
+        <div className="flex shrink-0 items-center gap-3 border-b border-zinc-200 bg-accent-soft px-3 py-2 dark:border-zinc-800">
+          <span className="shrink-0 font-mono" title={commit.hash}>{commit.hash.slice(0, 7)}</span>
+          <span className="truncate" title={commit.subject}>{commit.subject}</span>
+          <span className="shrink-0 text-[11px] text-zinc-500">{cmp?.base === 'Empty tree' ? 'First commit · all files added' : 'Compared with first parent'}</span>
+          <button onClick={() => setCommit(null)} className="ml-auto shrink-0 text-accent hover:underline">
+            Back to branch comparison
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="flex shrink-0 items-center gap-2 border-b border-rose-200 bg-rose-50 px-3 py-1.5 text-rose-700 select-text dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
@@ -290,15 +321,20 @@ export default function App() {
         <div className="flex min-h-0 flex-1">
           <div style={{ width: layout.sidebar }} className="shrink-0">
             <Sidebar
+              key={`${info.repo}|${base}|${head}|${historyVersion}`}
+              repo={info.repo}
+              branches={info.branches}
               files={files}
-              commits={cmp?.commits ?? []}
+              commit={commit}
+              onSelectCommit={setCommit}
               selected={selected}
               onSelect={setSelected}
               loading={loading}
+              error={error}
               base={base}
               head={head}
               merged={cmp?.merged}
-              onUseBase={setBase}
+              onUseBase={changeBase}
             />
           </div>
           <Splitter onDrag={(dx) => setLayout((l) => ({ ...l, sidebar: Math.max(200, Math.min(520, l.sidebar + dx)) }))} />
@@ -309,6 +345,7 @@ export default function App() {
                 mergeBase={cmp.mergeBase}
                 head={cmp.head}
                 base={cmp.base}
+                commitMode={!!commit}
                 file={file}
                 options={view}
                 onOptions={setView}
@@ -330,8 +367,9 @@ export default function App() {
             <div style={{ width: layout.review }} className={layout.reviewOpen ? 'shrink-0' : 'hidden'}>
                 <ReviewPanel
                   repo={info.repo}
-                  base={base}
-                  head={head}
+                  base={commit ? cmp?.base ?? '' : base}
+                  head={commit ? commit.hash : head}
+                  commit={commit?.hash}
                   files={files}
                   settings={settings}
                   onJump={onJump}

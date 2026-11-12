@@ -28,7 +28,7 @@ export async function startReview(req: ReviewRequest, emit: (e: ReviewEvent) => 
 
   try {
     sink.status('Collecting the diff…')
-    const [mat, info] = await Promise.all([reviewMaterial(req.repo, req.base, req.head), listBranches(req.repo)])
+    const [mat, info] = await Promise.all([reviewMaterial(req.repo, req.base, req.head, req.commit), listBranches(req.repo)])
     if (!mat.files.length) {
       sink.error(`No changes between ${req.base} and ${req.head}.`)
       return
@@ -42,8 +42,9 @@ export async function startReview(req: ReviewRequest, emit: (e: ReviewEvent) => 
     const settings = getSettings()
     const prompt = buildPrompt({
       repoName: path.basename(req.repo),
-      base: req.base,
-      head: req.head,
+      base: mat.base,
+      head: mat.head,
+      commit: req.commit,
       currentBranch: info.current,
       commits: mat.commits,
       files: mat.files,

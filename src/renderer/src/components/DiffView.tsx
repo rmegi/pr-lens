@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
 import { DiffEditor } from '@monaco-editor/react'
 import type { ChangedFile, FilePair } from '@shared/types'
 import { languageFor, monaco } from '../lib/monaco'
@@ -16,6 +16,7 @@ interface Props {
   mergeBase: string
   head: string
   base: string
+  commitMode: boolean
   file: ChangedFile | null
   options: ViewOptions
   onOptions: (o: ViewOptions) => void
@@ -40,11 +41,23 @@ function Toggle({ on, onClick, children, title }: { on: boolean; onClick: () => 
   )
 }
 
-export default function DiffView({ repo, mergeBase, head, base, file, options, onOptions, dark, jump, editorRef }: Props) {
+export default function DiffView({ repo, mergeBase, head, base, commitMode, file, options, onOptions, dark, jump, editorRef }: Props) {
   const [pair, setPair] = useState<FilePair | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const decorations = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
+  const showEditor = Boolean(!error && file && pair && !pair.binary && !pair.tooLarge)
+
+  useLayoutEffect(() => () => {
+    const editor = editorRef.current
+    const models = editor?.getModel()
+    // Detach models before the React wrapper disposes them; Monaco requires this order.
+    editor?.setModel(null)
+    models?.original.dispose()
+    models?.modified.dispose()
+    editorRef.current = null
+    decorations.current = null
+  }, [showEditor, editorRef])
 
   useEffect(() => {
     if (!file) {
@@ -139,9 +152,10 @@ export default function DiffView({ repo, mergeBase, head, base, file, options, o
       {file && options.sideBySide && (
         <div className="grid shrink-0 grid-cols-2 border-b border-zinc-200 font-mono text-[11px] text-zinc-500 dark:border-zinc-800/80">
           <div className="truncate px-3 py-1">
-            {base} <span className="text-zinc-400">(merge-base {mergeBase.slice(0, 7)})</span>
+            {commitMode ? (base === 'Empty tree' ? base : `Parent ${base.slice(0, 7)}`) : base}
+            {!commitMode && <span className="text-zinc-400"> (merge-base {mergeBase.slice(0, 7)})</span>}
           </div>
-          <div className="truncate border-l border-zinc-200 px-3 py-1 dark:border-zinc-800/80">{head}</div>
+          <div className="truncate border-l border-zinc-200 px-3 py-1 dark:border-zinc-800/80">{commitMode ? `Commit ${head.slice(0, 7)}` : head}</div>
         </div>
       )}
 
@@ -152,7 +166,7 @@ export default function DiffView({ repo, mergeBase, head, base, file, options, o
             {pair.binary ? 'Binary file, no text diff to show.' : 'This file is larger than 5 MB, so it is not shown.'}
           </div>
         )}
-        {!error && file && pair && !pair.binary && !pair.tooLarge && (
+        {showEditor && file && pair && (
           <DiffEditor
             original={pair.original}
             modified={pair.modified}
