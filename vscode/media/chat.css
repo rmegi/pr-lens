@@ -1,0 +1,28 @@
+body { margin: 0; padding: 16px; color: var(--vscode-foreground); background: var(--vscode-editor-background); font: var(--vscode-font-size)/1.5 var(--vscode-font-family); }
+header { border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 12px; }
+p { margin: 6px 0; }
+#target { overflow-wrap: anywhere; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+button { padding: 5px 10px; border: 1px solid transparent; border-radius: 3px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); font: inherit; cursor: pointer; }
+button:hover { background: var(--vscode-button-hoverBackground); }
+button:disabled { opacity: .5; cursor: default; }
+button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+button:focus-visible, textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+#provider, #empty, #status, .send span { color: var(--vscode-descriptionForeground); font-size: .92em; }
+#messages { margin: 14px 0; }
+.message { margin-bottom: 16px; overflow-wrap: anywhere; }
+.role { font-weight: 600; margin-bottom: 5px; }
+.user { white-space: pre-wrap; padding: 10px; background: var(--vscode-textBlockQuote-background); border-left: 2px solid var(--vscode-textBlockQuote-border); }
+.assistant h1, .assistant h2, .assistant h3 { font-size: 1.1em; margin: 18px 0 6px; }
+pre { overflow-x: auto; padding: 10px; background: var(--vscode-textCodeBlock-background); }
+code { font-family: var(--vscode-editor-font-family); font-size: .94em; }
+table { border-collapse: collapse; } th, td { padding: 5px 8px; border: 1px solid var(--vscode-panel-border); }
+a, button.location { color: var(--vscode-textLink-foreground); }
+button.location { border: 0; padding: 0; background: transparent; text-decoration: underline; font: inherit; }
+#error { padding: 10px; border: 1px solid var(--vscode-inputValidation-errorBorder); background: var(--vscode-inputValidation-errorBackground); white-space: pre-wrap; }
+#status { min-height: 22px; }
+form { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); }
+label { display: block; margin-bottom: 6px; }
+textarea { box-sizing: border-box; width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--vscode-input-border, transparent); background: var(--vscode-input-background); color: var(--vscode-input-foreground); font: inherit; }
+.send { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+[hidden] { display: none !important; }

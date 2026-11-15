@@ -6,6 +6,12 @@ Runs on **macOS and Linux** (Windows works too). Built with Electron, React, Typ
 
 ## Download
 
+### VS Code extension
+
+A native VS Code version is available in [`vscode/`](vscode/README.md), with branch selection, commit history, native read-only diffs, AI reviews, and follow-up chat. Build a local installer with `npm ci --prefix vscode` followed by `npm --prefix vscode run package` after installing this repository's dependencies. Install `dist/pr-lens-vscode-0.2.0.vsix` using **Extensions: Install from VSIX…**.
+
+### Desktop app
+
 Get the installer for your system from the [latest release](https://github.com/rmegi/pr-lens/releases/latest): `.dmg` for macOS (`arm64` = Apple Silicon, `x64` = Intel), `.exe` for Windows, `.AppImage` or `.deb` for Linux.
 
 The builds are not code-signed yet, so the first launch shows a warning:

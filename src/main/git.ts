@@ -48,6 +48,12 @@ function checkHash(h: string): string {
   return h
 }
 
+/** Resolve a branch once so an open diff keeps showing the same commit if the branch moves. */
+export async function resolveCommit(repo: string, ref: string): Promise<string> {
+  checkRef(ref, 'commit')
+  return (await git(repo, ['rev-parse', '--verify', `${ref}^{commit}`])).trim()
+}
+
 export async function listBranches(repo: string): Promise<RepoInfo> {
   const out = await git(repo, [
     'for-each-ref',
