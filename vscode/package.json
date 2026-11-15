@@ -1,0 +1,171 @@
+{
+  "name": "pr-lens",
+  "displayName": "PR Lens",
+  "description": "Compare branches, browse commits, and discuss changes with AI in VS Code.",
+  "version": "0.2.0",
+  "publisher": "rmegi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rmegi/pr-lens.git"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "SCM Providers"
+  ],
+  "main": "./out/extension.cjs",
+  "type": "module",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "PR Lens runs Git commands in the selected repository."
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "prLens",
+          "title": "PR Lens",
+          "icon": "media/pr-lens.svg"
+        }
+      ]
+    },
+    "views": {
+      "prLens": [
+        {
+          "id": "prLens.history",
+          "name": "Branches and commits"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "prLens.history",
+        "contents": "Compare branches and explore commit changes without switching your working tree.\n[Open repository](command:prLens.openRepository)",
+        "when": "!prLens.hasRepository"
+      }
+    ],
+    "commands": [
+      {
+        "command": "prLens.openRepository",
+        "title": "Open Repository",
+        "category": "PR Lens",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "prLens.selectBase",
+        "title": "Select Base Branch",
+        "category": "PR Lens"
+      },
+      {
+        "command": "prLens.selectHead",
+        "title": "Select Compare Branch",
+        "category": "PR Lens"
+      },
+      {
+        "command": "prLens.selectHistory",
+        "title": "Select History Branch",
+        "category": "PR Lens"
+      },
+      {
+        "command": "prLens.showBranchComparison",
+        "title": "Back to Branch Comparison",
+        "category": "PR Lens",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "prLens.refresh",
+        "title": "Refresh",
+        "category": "PR Lens",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "prLens.loadMore",
+        "title": "Load Older Commits",
+        "category": "PR Lens"
+      },
+      {
+        "command": "prLens.openChat",
+        "title": "Open AI Chat",
+        "category": "PR Lens",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "prLens.reviewChanges",
+        "title": "Review Selected Changes with AI",
+        "category": "PR Lens"
+      },
+      {
+        "command": "prLens.setApiKey",
+        "title": "Set Anthropic API Key",
+        "category": "PR Lens"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "prLens.openRepository",
+          "when": "view == prLens.history",
+          "group": "navigation@1"
+        },
+        {
+          "command": "prLens.refresh",
+          "when": "view == prLens.history && prLens.hasRepository",
+          "group": "navigation@2"
+        },
+        {
+          "command": "prLens.openChat",
+          "when": "view == prLens.history",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "PR Lens",
+      "properties": {
+        "prLens.ai.provider": {
+          "type": "string",
+          "enum": [
+            "claude-cli",
+            "anthropic-api"
+          ],
+          "default": "claude-cli",
+          "description": "AI provider. Claude CLI uses the login on the machine containing your repository."
+        },
+        "prLens.ai.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID. Leave blank to use the Claude CLI default. Required for Anthropic API."
+        },
+        "prLens.ai.instructions": {
+          "type": "string",
+          "default": "",
+          "description": "Additional team review guidelines sent with the diff."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build --config vite.config.ts && vite build --config webview.vite.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "vscode:prepublish": "npm run typecheck && npm run build",
+    "package": "vsce package --no-dependencies --out ../dist/pr-lens-vscode-0.2.0.vsix",
+    "test": "npm run build && node test/run.cjs"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.96.0",
+    "@vscode/vsce": "4.1.0"
+  }
+}

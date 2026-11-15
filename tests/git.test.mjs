@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import test from 'node:test'
-import { compare, compareCommit, filePair, listCommits, reviewMaterial } from '../src/main/git.ts'
+import { compare, compareCommit, filePair, listCommits, resolveCommit, reviewMaterial } from '../src/main/git.ts'
 import { buildPrompt } from '../src/main/ai/prompt.ts'
 
 function repository(t, format = 'sha1') {
@@ -50,6 +50,7 @@ test('selected commit shows only its changes and leaves the working tree alone',
   const root = r.commit('Initial')
   r.write('file.txt', 'after\n')
   const selected = r.commit('Change file')
+  assert.equal(await resolveCommit(r.repo, 'main'), selected)
   r.write('later.txt', 'later\n')
   const tip = r.commit('Later change')
   r.write('file.txt', 'uncommitted edit\n')
@@ -140,6 +141,7 @@ test('history pages reach old commits and reject invalid input', async (t) => {
     await assert.rejects(listCommits(r.repo, 'main', offset), /Invalid history offset/)
   }
   await assert.rejects(listCommits(r.repo, '--all', 0), /Invalid history ref/)
+  await assert.rejects(resolveCommit(r.repo, '--all'), /Invalid commit ref/)
   await assert.rejects(compareCommit(r.repo, '--all', false), /Invalid commit/)
   await assert.rejects(compareCommit(r.repo, 'abcdef123456', false))
 })

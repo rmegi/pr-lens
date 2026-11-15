@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{source}}; script-src 'nonce-{{nonce}}';">
+  <link rel="stylesheet" href="{{css}}">
+  <title>PR Lens AI</title>
+</head>
+<body>
+  <header>
+    <strong>PR Lens AI</strong>
+    <p id="target">Select a comparison in the PR Lens sidebar.</p>
+    <div class="toolbar">
+      <button id="review">Review changes</button>
+      <button id="stop" hidden>Stop</button>
+      <button id="clear" class="secondary">New chat</button>
+      <button id="settings" class="secondary">Settings</button>
+      <button id="apiKey" class="secondary">API key</button>
+    </div>
+    <p id="provider"></p>
+  </header>
+  <main id="messages" aria-label="Conversation"></main>
+  <p id="empty">Review the selected changes, or ask a question about them. Changing the comparison starts a new chat.</p>
+  <div id="error" role="alert" hidden></div>
+  <div id="status" role="status" aria-live="polite"></div>
+  <form id="form">
+    <label for="question">Ask about these changes</label>
+    <textarea id="question" rows="3" maxlength="20000" placeholder="What could break? Which tests should I add?"></textarea>
+    <div class="send"><span>Ctrl/Cmd+Enter to send</span><button id="send" type="submit">Send</button></div>
+  </form>
+  <script nonce="{{nonce}}" src="{{script}}"></script>
+</body>
+</html>

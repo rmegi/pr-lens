@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node", "vscode"],
+    "paths": { "@shared/*": ["../src/shared/*"] }
+  },
+  "include": ["src/**/*", "vite.config.ts", "../src/main/git.ts", "../src/shared/types.ts"]
+}
